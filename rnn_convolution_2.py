@@ -1,6 +1,7 @@
 # Test Neural Network consisting of a bidirectional LSTM followed by a convolution and maxpooling layer. The initial RNN
 # takes a sequence of one-hot-encoded characters as input
 # Import libraries
+import time
 from keras.models import Sequential, load_model
 from keras.layers import Dense, MaxPooling1D, Conv1D
 from keras.layers import LSTM
@@ -12,21 +13,31 @@ from sklearn.model_selection import train_test_split
 from keras.callbacks import EarlyStopping, ModelCheckpoint
 from keras.optimizers import RMSprop
 import matplotlib.pyplot as plt
-import os
+from sklearn.metrics import f1_score, accuracy_score
+# import os
 # os.environ["KERAS_BACKEND"] = "plaidml.keras.backend"
 
 # fix random seed for reproducibility
 np.random.seed(42)
 
+# define run id and parameters to store session
+run_id = str(time.time()).replace('.','')[:14]
+model_name = 'rnn_cnn_2_' + run_id
+model_file = model_name + '.h5'
+
 # importing dataset
 X_train = np.load('X_train.npy')
 y_train = np.load('y_train.npy')
+X_train, X_val, y_train, y_val = train_test_split(X_train,
+                                                  y_train,
+                                                  test_size=0.33,
+                                                  random_state=42)
 X_test = np.load('X_test.npy')
 y_test = np.load('y_test.npy')
 
 # Define callback for early stopping
 es = EarlyStopping(monitor='val_loss', mode='min', patience=10, verbose=1)
-mc = ModelCheckpoint('best_model.h5', monitor='val_loss', mode='min', verbose=1, save_best_only=True)
+mc = ModelCheckpoint(model_file, monitor='val_loss', mode='min', verbose=1, save_best_only=True)
 
 max_len = X_train.shape[1]
 output_dim = 2
@@ -55,7 +66,7 @@ opt = RMSprop(lr=0.001, rho=0.9, epsilon=None, decay=0.0)
 # Compiling the RNN
 classifier.compile(optimizer=opt,  # rmsprop usually good for RNN
                    # loss='mean_squared_error')
-                   loss='categorical_crossentropy',
+                   loss='binary_crossentropy',
                    metrics=['accuracy'])
 
 # print(classifier.summary())
@@ -63,7 +74,7 @@ classifier.compile(optimizer=opt,  # rmsprop usually good for RNN
 # Fitting the RNN to the training set
 history = classifier.fit(x=X_train,
                          y=y_train,
-                         validation_data=(X_test, y_test),  # TODO: replace with validation!
+                         validation_data=(X_val, y_val),
                          epochs=100,
                          batch_size=1024,
                          callbacks=[es, mc])
@@ -74,24 +85,42 @@ plt.plot(history.history['val_acc'])
 plt.title('model accuracy')
 plt.ylabel('accuracy')
 plt.xlabel('epoch')
-plt.legend(['train', 'test'], loc='upper left')
-plt.show()
+plt.legend(['train', 'validation'], loc='upper left')
+# plt.show()
+plt.savefig(model_name + '_accuracy.png')
+plt.close()
 # summarize history for loss
 plt.plot(history.history['loss'])
 plt.plot(history.history['val_loss'])
 plt.title('model loss')
 plt.ylabel('loss')
 plt.xlabel('epoch')
-plt.legend(['train', 'test'], loc='upper left')
-plt.show()
+plt.legend(['train', 'validatioo'], loc='upper left')
+# plt.show()
+plt.savefig(model_name + '_loss.png')
+plt.close()
 
 # load best model
-saved_model = load_model('best_model.h5')
+saved_model = load_model(model_file)
 
-# Predict the Test set results
+# Predict validation set results
+y_pred = saved_model.predict(X_val)
+y_pred = y_pred == np.amax(y_pred, axis=1, keepdims=True).astype('float64')
+y_pred_binary = [el[0] for el in y_pred]
+y_val_binary = [el[0] for el in y_val]
+f1_val = f1_score(y_val_binary, y_pred_binary)
+acc_val = accuracy_score(y_val_binary, y_pred_binary)
+
+# Predict the test set results
 y_pred = saved_model.predict(X_test)
-print(y_pred)
-y_pred = y_pred == np.amax(y_pred, axis=1, keepdims=True)  # translate prediction in order to compare with y_test
+y_pred = y_pred == np.amax(y_pred, axis=1, keepdims=True).astype('float64')
+y_pred_binary = [el[0] for el in y_pred]
+y_test_binary = [el[0] for el in y_test]
+f1_test = f1_score(y_test_binary, y_pred_binary)
+acc_test = accuracy_score(y_test_binary, y_pred_binary)
 
-print(y_test == 1.)
-print(y_pred)
+print('VAL. SET accuracy: {}'.format(acc_val))
+print('VAL. SET f1-score: {}'.format(f1_val))
+
+print('TEST SET accuracy: {}'.format(acc_test))
+print('TEST SET f1-score: {}'.format(f1_test))
