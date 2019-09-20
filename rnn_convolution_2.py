@@ -9,11 +9,12 @@ from keras.layers import Bidirectional
 import numpy as np
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, cross_val_score
 from keras.callbacks import EarlyStopping, ModelCheckpoint
 from keras.optimizers import RMSprop
 import matplotlib.pyplot as plt
 from sklearn.metrics import f1_score, accuracy_score
+from keras.wrappers.scikit_learn import KerasClassifier
 # import os
 # os.environ["KERAS_BACKEND"] = "plaidml.keras.backend"
 
@@ -75,9 +76,40 @@ classifier.compile(optimizer=opt,  # rmsprop usually good for RNN
 history = classifier.fit(x=X_train,
                          y=y_train,
                          validation_data=(X_val, y_val),
-                         epochs=100,
+                         epochs=1,
                          batch_size=1024,
                          callbacks=[es, mc])
+
+
+# def build_classifier():
+#     classifier = Sequential()
+#     classifier.add(Bidirectional(LSTM(n_lstm,
+#                                       input_shape=X_train.shape[1:],
+#                                       return_sequences=True)))
+#     classifier.add(Conv1D(filters=16,
+#                           kernel_size=3,  # should correspond to trigrams
+#                           strides=1,
+#                           activation='relu',
+#                           input_shape=(max_len, n_lstm)))
+#     classifier.add(MaxPooling1D(pool_size=2))
+#     classifier.add(Bidirectional(LSTM(32,
+#                                       input_shape=(
+#                                       (max_len - 2) / 2, 16))))  # ((max_len - kernel_size + 1)/pool_size, filters)
+#     classifier.add(Dense(output_dim,
+#                          activation='softmax'))
+#     opt = RMSprop(lr=0.001, rho=0.9, epsilon=None, decay=0.0)
+#     classifier.compile(optimizer=opt,  # rmsprop usually good for RNN
+#                        loss='binary_crossentropy',
+#                        metrics=['accuracy'])
+#     return classifier
+#
+#
+# classifier = KerasClassifier(build_fn=build_classifier, batch_size=1024, nb_epoch=2)
+# accuracies = cross_val_score(estimator=classifier,
+#                              X=X_train,
+#                              y=y_train,
+#                              cv=10,
+#                              n_jobs=-1)
 
 # summarize history for accuracy
 plt.plot(history.history['acc'])
@@ -95,7 +127,7 @@ plt.plot(history.history['val_loss'])
 plt.title('model loss')
 plt.ylabel('loss')
 plt.xlabel('epoch')
-plt.legend(['train', 'validatioo'], loc='upper left')
+plt.legend(['train', 'validation'], loc='upper left')
 # plt.show()
 plt.savefig(model_name + '_loss.png')
 plt.close()
